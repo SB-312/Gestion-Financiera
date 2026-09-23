@@ -1,2 +1,2 @@
-# Gesti-n-Financiera
+# Gestion-Financiera
 Proyecto privado para control de gastos
