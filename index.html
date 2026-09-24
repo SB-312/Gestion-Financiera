@@ -42,7 +42,7 @@ input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px
 </section>
 
 <div id="app" hidden>
- <div class="tabs"><button data-t="r" class="on">Resumen</button><button data-t="g">Gastos</button><button data-t="x">Fijos</button><button data-t="m">Meta Japón</button></div>
+ <div class="tabs"><button data-t="r" class="on">Resumen</button><button data-t="g">Gastos</button><button data-t="x">Fijos</button><button data-t="m">Metas</button></div>
  <section id="r"></section>
  <section id="g" hidden>
   <div class="card"><h2>Registrar gasto</h2>
@@ -63,7 +63,7 @@ input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px
 const sb=supabase.createClient('https://nvyyhukqgitiqmwituhk.supabase.co','sb_publishable_d_vasnMZlYLUcUzLtuU2Jw_TPek-CE8');
 const $=id=>document.getElementById(id), f=n=>'$'+Math.round(n).toLocaleString('es-CO');
 const CATS=['Comida','Ocio','Bicicleta','Otros'];
-const S={uid:null,budgets:{Comida:50,Ocio:25,Bicicleta:5,Otros:20},income:930000,rate:35,balance:0,card:0,fixed:[{n:"Internet",v:135000,d:1,p:null},{n:"Teléfono",v:35000,d:1,p:null}],ex:[],goal:{target:12000000,saved:0}};
+const S={uid:null,budgets:{Comida:50,Ocio:25,Bicicleta:5,Otros:20},income:930000,rate:35,balance:0,card:0,fixed:[{n:"Internet",v:135000,d:1,p:null},{n:"Teléfono",v:35000,d:1,p:null}],ex:[],goals:[]};
 let mt;const msg=t=>{$('msg').textContent=t;$('msg').hidden=!t;clearTimeout(mt);if(t)mt=setTimeout(()=>msg(''),5000)};
 const today=()=>new Date().toLocaleDateString('sv-SE');
 const ex=()=>S.ex.filter(e=>e.d.startsWith(today().slice(0,7)));
@@ -77,14 +77,16 @@ async function load(){
  let {data:s,error}=await sb.from('settings').select('*').maybeSingle();
  if(error)return msg(error.message);
  if(!s){const r=await sb.from('settings').insert({user_id:S.uid}).select().single();if(r.error)return msg(r.error.message);s=r.data}
- Object.assign(S,{budgets:Object.assign({Comida:50,Ocio:25,Bicicleta:5,Otros:20},s.budgets||{}),income:+s.income,rate:+s.rate,balance:+s.balance,card:+s.card,fixed:(s.fixed||[]).map(x=>Array.isArray(x)?{n:x[0],v:+x[1],d:1,p:null}:x),goal:{target:+s.goal_target,saved:+s.goal_saved}});
+ let gl=Array.isArray(s.goals)?s.goals:[];if(!gl.length&&(+s.goal_target||+s.goal_saved))gl=[{id:Date.now(),n:'Viaje a Japón',t:+s.goal_target,s:+s.goal_saved}];
+ if(gl.some(g=>g.p===undefined)){const n=gl.length;gl=gl.map((g,i)=>({...g,p:Math.floor(100/n)+(i===0?100%n:0)}))}
+ Object.assign(S,{budgets:Object.assign({Comida:50,Ocio:25,Bicicleta:5,Otros:20},s.budgets||{}),income:+s.income,rate:+s.rate,balance:+s.balance,card:+s.card,fixed:(s.fixed||[]).map(x=>Array.isArray(x)?{n:x[0],v:+x[1],d:1,p:null}:x),goals:gl});
  const e=await sb.from('expenses').select('*').order('spent_on').order('id');
  if(e.error)return msg(e.error.message);
  S.ex=e.data.map(x=>({i:x.id,d:x.spent_on,a:+x.amount,c:x.category,t:x.on_card}));
  render();
 }
 async function push(){
- const {error}=await sb.from('settings').upsert({user_id:S.uid,income:S.income,rate:S.rate,balance:S.balance,card:S.card,fixed:S.fixed,goal_target:S.goal.target,goal_saved:S.goal.saved,budgets:S.budgets,updated_at:new Date().toISOString()});
+ const {error}=await sb.from('settings').upsert({user_id:S.uid,income:S.income,rate:S.rate,balance:S.balance,card:S.card,fixed:S.fixed,goal_target:0,goal_saved:0,goals:S.goals,budgets:S.budgets,updated_at:new Date().toISOString()});
  if(error)msg(error.message);
 }
 function inp(l,k,o){return `<label>${l}</label><input type="number" inputmode="numeric" value="${(o?S.goal:S)[k]}" data-k="${k}" data-o="${o?1:0}">`}
@@ -123,14 +125,27 @@ function renderG(){
  $('list').innerHTML=e.length?e.map(x=>`<div class="row"><span>${x.d.slice(5)} · ${x.c}${x.t?' 💳':''}</span><span><b>${f(x.a)}</b> <button class="x" data-del="${x.i}">✕</button></span></div>`).join(''):'<span class="mu">Sin gastos registrados.</span>';
 }
 function renderM(){
- const g=S.goal,rem=Math.max(0,g.target-g.saved),ms=monthSave(),mo=ms>0?Math.ceil(rem/ms):0;
- const d=new Date();d.setMonth(d.getMonth()+mo);
- $('m').innerHTML=`<div class="card"><h2>🗾 Viaje a Japón</h2>
-  <div class="big">${f(g.saved)} <span class="mu" style="font-size:15px">de ${f(g.target)}</span></div>
-  <div class="bar"><i style="width:${Math.min(100,g.target?g.saved/g.target*100:0)}%"></i></div>
-  <div class="mu">Ahorrando ${f(ms)} al mes llegas en <b>${mo} meses</b> (${d.toLocaleDateString('es-CO',{month:'long',year:'numeric'})}).</div>
-  ${inp('Meta total (vuelos, hospedaje, comida, transporte)','target',1)}${inp('Ya ahorrado para Japón','saved',1)}
-  <p class="mu">La meta de $12.000.000 es un valor de ejemplo: cámbiala cuando cotices vuelos y hospedaje.</p></div>`;
+ const G=S.goals,ms=monthSave(),tot=G.reduce((a,g)=>a+g.s,0),ap=G.reduce((a,g)=>a+(g.p||0),0);
+ const eta=g=>{const rem=Math.max(0,g.t-g.s),am=ms*(g.p||0)/100;
+  if(g.t>0&&rem===0)return '🎉 ¡Meta cumplida!'+(g.p?' Puedes reasignar su % a otra meta.':'');
+  if(am<=0)return 'Asígnale un % de tu ahorro para calcular la fecha.';
+  const mo=Math.ceil(rem/am),d=new Date();d.setMonth(d.getMonth()+mo);
+  return `Aporte estimado ${f(am)}/mes · llegas en <b>${mo} meses</b> (${d.toLocaleDateString('es-CO',{month:'long',year:'numeric'})})`};
+ $('m').innerHTML=`<div class="card"><h2>🎯 Mis metas</h2><div class="big">${f(tot)}</div><div class="mu">ahorrado en ${G.length} meta${G.length===1?'':'s'}</div>
+  <div class="row" style="margin-top:8px"><span>Tu ahorro mensual (${S.rate}% de tu ingreso)</span><b>${f(ms)}</b></div>
+  <div class="row mu"><span>${ap<100?'Sin asignar a ninguna meta':'Todo tu ahorro está asignado'}</span><b>${100-ap}%</b></div>
+  ${G.length>1?'<button class="btn alt" id="eq">Repartir en partes iguales</button>':''}</div>`
+ +G.map(g=>{const p=g.t>0?Math.min(100,g.s/g.t*100):0;return `<div class="card"><div class="row"><h2 style="margin:0">${esc(g.n)}</h2><button class="x" data-delg="${g.id}">✕</button></div>
+  <div class="big">${f(g.s)} <span class="mu" style="font-size:15px">de ${f(g.t)}</span></div><div class="bar"><i style="width:${p}%"></i></div>
+  <div class="mu">${g.t>0&&g.s>=g.t?'':'Faltan '+f(Math.max(0,g.t-g.s))+' ('+Math.round(p)+'%)<br>'}${eta(g)}</div>
+  <div class="g2"><div><label>Meta total</label><input type="number" inputmode="numeric" value="${g.t}" data-gt="${g.id}"></div>
+  <div><label>% de mi ahorro</label><input type="number" inputmode="numeric" min="0" max="100" value="${g.p||0}" data-gp="${g.id}"></div></div>
+  <div class="g2"><div><label>Monto</label><input type="number" inputmode="numeric" id="ga-${g.id}"></div>
+  <div><label>Movimiento</label><select id="gs-${g.id}"><option value="in-bal">Aportar desde mi saldo</option><option value="in-ext">Aportar: regalo o ingreso extra</option><option value="out-bal">Retirar y devolver al saldo</option><option value="out-ext">Retirar: ya lo gasté</option></select></div></div>
+  <button class="btn" data-gadd="${g.id}">Registrar</button></div>`}).join('')
+ +`<div class="card"><h2>Nueva meta</h2><label>Nombre</label><input id="gn" placeholder="Ej: Viaje a Japón"><label>Monto objetivo</label><input id="gv" type="number" inputmode="numeric"><button class="btn" id="addg">Crear meta</button>
+  <p class="mu">La fecha de cada meta es un estimado: usa el % de tu ahorro mensual que le asignes y el dinero que ya tiene ahorrado. Al crear una meta recibe el % que aún no está asignado.</p>
+  <p class="mu">Desde mi saldo: baja tu saldo en cuenta. Regalo o ingreso extra: suma a la meta sin tocar tu saldo. Al retirar puedes devolver el dinero al saldo o dejarlo como gastado.</p></div>`;
 }
 function renderX(){
  const m=mk();
@@ -140,6 +155,8 @@ function renderX(){
 function render(){renderR();renderG();renderX();renderM()}
 
 document.addEventListener('change',e=>{const t=e.target;
+ if(t.dataset.gp){const g=S.goals.find(x=>x.id==t.dataset.gp);if(g){const oth=S.goals.reduce((a,x)=>a+(x===g?0:x.p||0),0),v=Math.max(0,+t.value||0);g.p=Math.min(v,100-oth);if(v>g.p)msg('Solo queda '+g.p+'% sin asignar');render();push()}return}
+ if(t.dataset.gt){const g=S.goals.find(x=>x.id==t.dataset.gt);if(g){g.t=Math.max(0,+t.value||0);render();push()}return}
  if(t.dataset.bd){S.budgets[t.dataset.bd]=Math.min(100,Math.max(0,+t.value||0));render();push();return}
  if(t.dataset.fi){const x=S.fixed[+t.dataset.fi];x[t.dataset.fk]=Math.max(0,+t.value||0);if(x.d<1)x.d=1;if(x.d>31)x.d=31;render();push();return}
  if(t.dataset.k){(t.dataset.o==='1'?S.goal:S)[t.dataset.k]=+t.value||0;render();push()}});
@@ -151,6 +168,14 @@ document.addEventListener('click',async e=>{const t=e.target;
  if(q.undo!==undefined){const x=S.fixed[+q.undo];x.p=null;S.balance+=x.v;render();push()}
  if(q.delx!==undefined&&confirm('¿Eliminar este gasto fijo?')){S.fixed.splice(+q.delx,1);render();push()}
  if(t.id==='paycard'){const r=prompt('¿Cuánto pagaste de la tarjeta?',Math.round(S.card));if(r===null)return;const a=+String(r).replace(/\D/g,'');if(!(a>0))return msg('Monto inválido');if(a>S.card)return msg('El pago es mayor que tu deuda actual');S.card-=a;S.balance-=a;render();push()}
+ if(q.gadd!==undefined){const g=S.goals.find(x=>x.id==q.gadd),a=+String($('ga-'+q.gadd).value).replace(/\D/g,''),m=$('gs-'+q.gadd).value;
+  if(!g)return;if(!(a>0))return msg('Escribe un monto');
+  if(m.startsWith('in')){if(m==='in-bal'){if(a>S.balance)return msg('Tu saldo en cuenta no alcanza');S.balance-=a}g.s+=a}
+  else{if(a>g.s)return msg('La meta no tiene tanto ahorrado');g.s-=a;if(m==='out-bal')S.balance+=a}
+  render();push()}
+ if(q.delg!==undefined&&confirm('¿Eliminar esta meta? Su dinero ahorrado NO se devuelve al saldo; si quieres devolverlo, retíralo antes.')){S.goals=S.goals.filter(x=>x.id!=q.delg);render();push()}
+ if(t.id==='eq'){const n=S.goals.length;S.goals.forEach((g,i)=>g.p=Math.floor(100/n)+(i===0?100%n:0));render();push()}
+ if(t.id==='addg'){const n=$('gn').value.trim(),v=+$('gv').value;if(!n||!(v>0))return msg('Escribe nombre y monto objetivo');S.goals.push({id:Date.now(),n,t:v,s:0,p:Math.max(0,100-S.goals.reduce((a,x)=>a+(x.p||0),0))});render();push()}
  if(t.id==='addf'){const n=$('fn').value.trim(),v=+$('fv').value,d=Math.min(31,Math.max(1,+$('fd').value||1));if(!n||!(v>0))return msg('Escribe nombre y monto');S.fixed.push({n,v,d,p:null});render();push()}
 });
 $('add').onclick=async()=>{const a=+$('ga').value;if(!(a>0))return;
