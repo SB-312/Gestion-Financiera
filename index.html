@@ -49,7 +49,8 @@ input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px
    <div class="g2"><div><label>Monto (COP)</label><input id="ga" type="number" inputmode="numeric" placeholder="20000"></div>
    <div><label>Categoría</label><select id="gc"><option>Comida</option><option>Ocio</option><option>Bicicleta</option><option>Otros</option></select></div></div>
    <label>Pagado con</label><select id="gm"><option value="d">Efectivo / débito</option><option value="t">Tarjeta de crédito</option></select>
-   <button class="btn" id="add">Agregar</button></div>
+   <button class="btn" id="add">Agregar</button>
+   <p class="mu">Débito o efectivo se descuenta de tu saldo. Tarjeta se suma a tu deuda.</p></div>
   <div class="card"><h2>Gastos de este mes</h2><div id="list"></div></div>
  </section>
  <section id="x" hidden></section>
@@ -97,10 +98,10 @@ function renderR(){
  <div class="card"><div class="mu">Te queda para gastar este mes</div><div class="big ${left<0?'wa':''}">${f(left)}</div>
   <div class="bar"><i style="width:${pct}%"></i></div><div class="mu">Gastado ${f(spent)} de ${f(budget)} (después de ahorro y fijos)</div></div>
  <div class="card"><h2>Por pagar</h2>
-  <div class="row"><span>Tarjetas (deuda + compras del mes)</span><b>${f(S.card+cr)}</b></div>
+  <div class="row"><span>Tarjetas de crédito</span><span><b>${f(S.card)}</b> <button class="pay" id="paycard">Pagué</button></span></div>
   ${fx}
   <div class="row"><span>Saldo en cuenta</span><b>${f(S.balance)}</b></div>
-  <div class="row mu"><span>Libre tras pagar todo</span><b>${f(S.balance-S.card-cr-pv)}</b></div></div>
+  <div class="row mu"><span>Libre tras pagar todo</span><b>${f(S.balance-S.card-pv)}</b></div></div>
  <div class="card"><h2>Cada quincena</h2>
   <div class="row"><span>Ahorro (${S.rate}%)</span><b>${f(S.income*S.rate/100)}</b></div>
   <div class="row"><span>Para vivir</span><b>${f(S.income*(1-S.rate/100))}</b></div></div>
@@ -135,17 +136,18 @@ document.addEventListener('change',e=>{const t=e.target;
  if(t.dataset.k){(t.dataset.o==='1'?S.goal:S)[t.dataset.k]=+t.value||0;render();push()}});
 document.addEventListener('click',async e=>{const t=e.target;
  if(t.dataset.t){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b===t));['r','g','x','m'].forEach(s=>$(s).hidden=s!==t.dataset.t)}
- if(t.dataset.del){const {error}=await sb.from('expenses').delete().eq('id',t.dataset.del);if(error)return msg(error.message);S.ex=S.ex.filter(x=>x.i!=t.dataset.del);render()}
+ if(t.dataset.del){const {error}=await sb.from('expenses').delete().eq('id',t.dataset.del);if(error)return msg(error.message);const g=S.ex.find(x=>x.i==t.dataset.del);S.ex=S.ex.filter(x=>x.i!=t.dataset.del);if(g){if(g.t)S.card-=g.a;else S.balance+=g.a;push()}render()}
  const q=t.dataset;
  if(q.pay!==undefined){const x=S.fixed[+q.pay];x.p=mk();S.balance-=x.v;render();push()}
  if(q.undo!==undefined){const x=S.fixed[+q.undo];x.p=null;S.balance+=x.v;render();push()}
  if(q.delx!==undefined&&confirm('¿Eliminar este gasto fijo?')){S.fixed.splice(+q.delx,1);render();push()}
+ if(t.id==='paycard'){const r=prompt('¿Cuánto pagaste de la tarjeta?',Math.round(S.card));if(r===null)return;const a=+String(r).replace(/\D/g,'');if(!(a>0))return msg('Monto inválido');if(a>S.card)return msg('El pago es mayor que tu deuda actual');S.card-=a;S.balance-=a;render();push()}
  if(t.id==='addf'){const n=$('fn').value.trim(),v=+$('fv').value,d=Math.min(31,Math.max(1,+$('fd').value||1));if(!n||!(v>0))return msg('Escribe nombre y monto');S.fixed.push({n,v,d,p:null});render();push()}
 });
 $('add').onclick=async()=>{const a=+$('ga').value;if(!(a>0))return;
  const {data,error}=await sb.from('expenses').insert({amount:a,category:$('gc').value,on_card:$('gm').value==='t',spent_on:today()}).select().single();
  if(error)return msg(error.message);
- S.ex.push({i:data.id,d:data.spent_on,a:+data.amount,c:data.category,t:data.on_card});$('ga').value='';render()};
+ S.ex.push({i:data.id,d:data.spent_on,a:+data.amount,c:data.category,t:data.on_card});if(data.on_card)S.card+=+data.amount;else S.balance-=+data.amount;$('ga').value='';render();push()};
 
 const creds=()=>({email:$('em').value.trim(),password:$('pw').value});
 $('in').onclick=async()=>{const {error}=await sb.auth.signInWithPassword(creds());if(error)msg(error.message)};
