@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi control financiero</title>
+<style>
+:root{--bg:#f6f5f1;--cd:#fff;--tx:#1d2521;--mu:#68716c;--ac:#1f7a5a;--bd:#e2e0d8;--wa:#c2410c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15191a;--cd:#1e2426;--tx:#eceee9;--mu:#96a09a;--ac:#4cc49a;--bd:#2f3739;--wa:#fb923c}}
+:root[data-theme="dark"]{--bg:#15191a;--cd:#1e2426;--tx:#eceee9;--mu:#96a09a;--ac:#4cc49a;--bd:#2f3739;--wa:#fb923c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 12px}h2{font-size:15px;margin:0 0 10px}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{flex:1;padding:9px;border:1px solid var(--bd);background:var(--cd);color:var(--tx);border-radius:9px;font:inherit;cursor:pointer}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0}
+.mu{color:var(--mu)}.big{font-size:24px;font-weight:650}.wa{color:var(--wa)}
+label{display:block;font-size:13px;color:var(--mu);margin:8px 0 3px}
+input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{width:100%;margin-top:10px;padding:10px;border:0;border-radius:9px;background:var(--ac);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.bar{height:9px;background:var(--bd);border-radius:9px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:var(--ac)}
+.x{background:none;border:0;color:var(--mu);cursor:pointer;font-size:16px}
+[hidden]{display:none}
+</style></head><body><main>
+<h1>Mi control financiero</h1>
+<div class="tabs"><button data-t="r" class="on">Resumen</button><button data-t="g">Gastos</button><button data-t="m">Meta Japón</button></div>
+
+<section id="r"></section>
+
+<section id="g" hidden>
+ <div class="card"><h2>Registrar gasto</h2>
+  <div class="g2"><div><label>Monto (COP)</label><input id="ga" type="number" inputmode="numeric" placeholder="20000"></div>
+  <div><label>Categoría</label><select id="gc"><option>Comida</option><option>Ocio</option><option>Bicicleta</option><option>Otros</option></select></div></div>
+  <label>Pagado con</label><select id="gm"><option value="d">Efectivo / débito</option><option value="t">Tarjeta de crédito</option></select>
+  <button class="btn" id="add">Agregar</button></div>
+ <div class="card"><h2>Gastos de este mes</h2><div id="list"></div></div>
+</section>
+
+<section id="m" hidden></section>
+
+<script>
+const $=id=>document.getElementById(id), f=n=>'$'+Math.round(n).toLocaleString('es-CO');
+const D={income:930000,rate:35,balance:791550,card:230000,fixed:[["Internet",135000],["Teléfono",35000]],ex:[],goal:{target:12000000,saved:0}};
+let S=JSON.parse(JSON.stringify(D));
+try{const r=localStorage.getItem('cf1');if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const save=()=>{try{localStorage.setItem('cf1',JSON.stringify(S))}catch(e){}};
+const mk=()=>new Date().toISOString().slice(0,7);
+const ex=()=>S.ex.filter(e=>e.d.startsWith(mk()));
+const fixed=()=>S.fixed.reduce((a,b)=>a+b[1],0);
+const monthSave=()=>2*S.income*S.rate/100;
+
+function inp(l,k,obj='S'){return `<label>${l}</label><input type="number" inputmode="numeric" value="${(obj==='S'?S:S.goal)[k]}" data-k="${k}" data-o="${obj}">`}
+
+function renderR(){
+ const e=ex(),cash=e.filter(x=>!x.t).reduce((a,b)=>a+b.a,0),cr=e.filter(x=>x.t).reduce((a,b)=>a+b.a,0);
+ const budget=2*S.income-monthSave()-fixed(), spent=cash+cr, left=budget-spent, pct=Math.min(100,Math.max(0,spent/budget*100));
+ const cat={};e.forEach(x=>cat[x.c]=(cat[x.c]||0)+x.a);
+ $('r').innerHTML=`
+ <div class="card"><div class="mu">Te queda para gastar este mes</div><div class="big ${left<0?'wa':''}">${f(left)}</div>
+  <div class="bar"><i style="width:${pct}%"></i></div><div class="mu">Gastado ${f(spent)} de ${f(budget)} (después de ahorro y fijos)</div></div>
+ <div class="card"><h2>Por pagar</h2>
+  <div class="row"><span>Tarjetas (deuda + compras del mes)</span><b>${f(S.card+cr)}</b></div>
+  <div class="row"><span>Fijos del próximo mes</span><b>${f(fixed())}</b></div>
+  <div class="row"><span>Saldo en cuenta</span><b>${f(S.balance)}</b></div>
+  <div class="row mu"><span>Libre tras pagar todo</span><b>${f(S.balance-S.card-cr-fixed())}</b></div></div>
+ <div class="card"><h2>Cada quincena</h2>
+  <div class="row"><span>Ahorro (${S.rate}%)</span><b>${f(S.income*S.rate/100)}</b></div>
+  <div class="row"><span>Para vivir</span><b>${f(S.income*(1-S.rate/100))}</b></div></div>
+ <div class="card"><h2>En qué gastaste</h2>${Object.keys(cat).length?Object.entries(cat).map(([k,v])=>`<div class="row"><span>${k}</span><b>${f(v)}</b></div>`).join(''):'<span class="mu">Aún no hay gastos este mes.</span>'}</div>
+ <div class="card"><h2>Mis datos</h2>${inp('Ingreso neto por quincena','income')}${inp('% de ahorro por quincena','rate')}${inp('Saldo en cuenta','balance')}${inp('Deuda actual de tarjetas','card')}
+  <button class="btn" style="background:var(--mu)" id="rs">Borrar todo y reiniciar</button></div>`;
+ $('rs').onclick=()=>{if(confirm('¿Borrar todos tus datos?')){S=JSON.parse(JSON.stringify(D));save();render()}};
+}
+function renderG(){
+ const e=ex().slice().reverse();
+ $('list').innerHTML=e.length?e.map(x=>`<div class="row"><span>${x.d.slice(5)} · ${x.c}${x.t?' 💳':''}</span><span><b>${f(x.a)}</b> <button class="x" data-del="${x.i}">✕</button></span></div>`).join(''):'<span class="mu">Sin gastos registrados.</span>';
+}
+function renderM(){
+ const g=S.goal,rem=Math.max(0,g.target-g.saved),ms=monthSave(),mo=ms>0?Math.ceil(rem/ms):0;
+ const d=new Date();d.setMonth(d.getMonth()+mo);
+ $('m').innerHTML=`<div class="card"><h2>🗾 Viaje a Japón</h2>
+  <div class="big">${f(g.saved)} <span class="mu" style="font-size:15px">de ${f(g.target)}</span></div>
+  <div class="bar"><i style="width:${Math.min(100,g.saved/g.target*100)}%"></i></div>
+  <div class="mu">Ahorrando ${f(ms)} al mes llegas en <b>${mo} meses</b> (${d.toLocaleDateString('es-CO',{month:'long',year:'numeric'})}).</div>
+  ${inp('Meta total (vuelos, hospedaje, comida, transporte, viaje)','target','G')}${inp('Ya ahorrado para Japón','saved','G')}
+  <p class="mu">La meta de $12.000.000 es un valor de ejemplo: cámbialo cuando cotices vuelos y hospedaje. Considera también el tipo de cambio yen/peso y si necesitas visa.</p></div>`;
+}
+function render(){renderR();renderG();renderM()}
+document.addEventListener('change',e=>{const t=e.target;if(t.dataset.k){(t.dataset.o==='G'?S.goal:S)[t.dataset.k]=+t.value||0;save();render()}});
+document.addEventListener('click',e=>{const t=e.target;
+ if(t.dataset.t){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b===t));['r','g','m'].forEach(s=>$(s).hidden=s!==t.dataset.t)}
+ if(t.dataset.del){S.ex=S.ex.filter(x=>x.i!=t.dataset.del);save();render()}});
+$('add').onclick=()=>{const a=+$('ga').value;if(!a)return;S.ex.push({i:Date.now(),d:new Date().toISOString().slice(0,10),a,c:$('gc').value,t:$('gm').value==='t'});$('ga').value='';save();render()};
+render();
+</script></main></body></html>
