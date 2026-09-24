@@ -150,8 +150,9 @@ $('add').onclick=async()=>{const a=+$('ga').value;if(!(a>0))return;
  S.ex.push({i:data.id,d:data.spent_on,a:+data.amount,c:data.category,t:data.on_card});if(data.on_card)S.card+=+data.amount;else S.balance-=+data.amount;$('ga').value='';render();push()};
 
 const creds=()=>({email:$('em').value.trim(),password:$('pw').value});
-$('in').onclick=async()=>{const {error}=await sb.auth.signInWithPassword(creds());if(error)msg(error.message)};
-$('up').onclick=async()=>{const {error}=await sb.auth.signUp({...creds(),options:{emailRedirectTo:location.origin+location.pathname}});
+const chk=c=>!c.email||!c.password?'Escribe tu correo y contraseña':c.password.length<6?'La contraseña debe tener mínimo 6 caracteres':'';
+$('in').onclick=async()=>{const c=creds(),v=chk(c);if(v)return msg(v);const {error}=await sb.auth.signInWithPassword(c);if(error)msg(error.message)};
+$('up').onclick=async()=>{const c=creds(),v=chk(c);if(v)return msg(v);const {error}=await sb.auth.signUp({...c,options:{emailRedirectTo:location.origin+location.pathname}});
  msg(error?error.message:'Cuenta creada. Confirma tu correo y luego inicia sesión.')};
 
 sb.auth.onAuthStateChange((ev,ses)=>setTimeout(async()=>{
