@@ -27,6 +27,11 @@ input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px
 .bar{height:9px;background:var(--bd);border-radius:9px;overflow:hidden;margin:6px 0}
 .bar i{display:block;height:100%;background:var(--ac)}
 .pay{border:1px solid var(--ac);color:var(--ac);background:none;border-radius:7px;padding:3px 9px;font:inherit;cursor:pointer}
+.car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:8px;margin:8px 0;border-radius:10px}
+.car .sl{flex:0 0 100%;scroll-snap-align:center;position:relative;aspect-ratio:16/10;border-radius:10px;overflow:hidden;background:var(--bg)}
+.car .sl img{width:100%;height:100%;object-fit:cover;display:block}
+.car .sl button{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:7px;width:26px;height:26px;cursor:pointer}
+.car .add{flex:0 0 100%;scroll-snap-align:center;aspect-ratio:16/10;border:2px dashed var(--bd);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--mu);cursor:pointer;background:var(--bg)}
 .x{background:none;border:0;color:var(--mu);cursor:pointer;font-size:16px}
 #msg{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:616px;margin:0 auto;background:var(--tx);color:var(--bg);padding:10px 14px;border-radius:10px;z-index:9}
 [hidden]{display:none!important}
@@ -78,6 +83,7 @@ async function load(){
  if(error)return msg(error.message);
  if(!s){const r=await sb.from('settings').insert({user_id:S.uid}).select().single();if(r.error)return msg(r.error.message);s=r.data}
  let gl=Array.isArray(s.goals)?s.goals:[];if(!gl.length&&(+s.goal_target||+s.goal_saved))gl=[{id:Date.now(),n:'Viaje a Japón',t:+s.goal_target,s:+s.goal_saved}];
+ gl=gl.map(g=>({img:[],...g}));
  if(gl.some(g=>g.p===undefined)){const n=gl.length;gl=gl.map((g,i)=>({...g,p:Math.floor(100/n)+(i===0?100%n:0)}))}
  Object.assign(S,{budgets:Object.assign({Comida:50,Ocio:25,Bicicleta:5,Otros:20},s.budgets||{}),income:+s.income,rate:+s.rate,balance:+s.balance,card:+s.card,fixed:(s.fixed||[]).map(x=>Array.isArray(x)?{n:x[0],v:+x[1],d:1,p:null}:x),goals:gl});
  const e=await sb.from('expenses').select('*').order('spent_on').order('id');
@@ -131,11 +137,13 @@ function renderM(){
   if(am<=0)return 'Asígnale un % de tu ahorro para calcular la fecha.';
   const mo=Math.ceil(rem/am),d=new Date();d.setMonth(d.getMonth()+mo);
   return `Aporte estimado ${f(am)}/mes · llegas en <b>${mo} meses</b> (${d.toLocaleDateString('es-CO',{month:'long',year:'numeric'})})`};
+ const car=g=>`<div class="car" id="car-${g.id}">${(g.img||[]).map((im,i)=>`<div class="sl"><img src="${im}"><button data-delimg="${g.id}:${i}">✕</button></div>`).join('')}<label class="add">＋ Agregar foto<input type="file" accept="image/*" multiple style="display:none" data-imgfor="${g.id}"></label></div>`;
  $('m').innerHTML=`<div class="card"><h2>🎯 Mis metas</h2><div class="big">${f(tot)}</div><div class="mu">ahorrado en ${G.length} meta${G.length===1?'':'s'}</div>
   <div class="row" style="margin-top:8px"><span>Tu ahorro mensual (${S.rate}% de tu ingreso)</span><b>${f(ms)}</b></div>
   <div class="row mu"><span>${ap<100?'Sin asignar a ninguna meta':'Todo tu ahorro está asignado'}</span><b>${100-ap}%</b></div>
   ${G.length>1?'<button class="btn alt" id="eq">Repartir en partes iguales</button>':''}</div>`
  +G.map(g=>{const p=g.t>0?Math.min(100,g.s/g.t*100):0;return `<div class="card"><div class="row"><h2 style="margin:0">${esc(g.n)}</h2><button class="x" data-delg="${g.id}">✕</button></div>
+  ${car(g)}
   <div class="big">${f(g.s)} <span class="mu" style="font-size:15px">de ${f(g.t)}</span></div><div class="bar"><i style="width:${p}%"></i></div>
   <div class="mu">${g.t>0&&g.s>=g.t?'':'Faltan '+f(Math.max(0,g.t-g.s))+' ('+Math.round(p)+'%)<br>'}${eta(g)}</div>
   <div class="g2"><div><label>Meta total</label><input type="number" inputmode="numeric" value="${g.t}" data-gt="${g.id}"></div>
@@ -145,8 +153,17 @@ function renderM(){
   <button class="btn" data-gadd="${g.id}">Registrar</button></div>`}).join('')
  +`<div class="card"><h2>Nueva meta</h2><label>Nombre</label><input id="gn" placeholder="Ej: Viaje a Japón"><label>Monto objetivo</label><input id="gv" type="number" inputmode="numeric"><button class="btn" id="addg">Crear meta</button>
   <p class="mu">La fecha de cada meta es un estimado: usa el % de tu ahorro mensual que le asignes y el dinero que ya tiene ahorrado. Al crear una meta recibe el % que aún no está asignado.</p>
-  <p class="mu">Desde mi saldo: baja tu saldo en cuenta. Regalo o ingreso extra: suma a la meta sin tocar tu saldo. Al retirar puedes devolver el dinero al saldo o dejarlo como gastado.</p></div>`;
+  <p class="mu">Desde mi saldo: baja tu saldo en cuenta. Regalo o ingreso extra: suma a la meta sin tocar tu saldo. Al retirar puedes devolver el dinero al saldo o dejarlo como gastado.</p>
+  <p class="mu">Las fotos se guardan comprimidas junto con tus datos. Usa pocas por meta para que la app sincronice rápido.</p></div>`;
 }
+function shrink(file){return new Promise((res,rej)=>{
+ const r=new FileReader();
+ r.onload=()=>{const im=new Image();im.onload=()=>{
+   const mw=1000,sc=Math.min(1,mw/im.width),w=Math.round(im.width*sc),h=Math.round(im.height*sc);
+   const c=document.createElement('canvas');c.width=w;c.height=h;
+   c.getContext('2d').drawImage(im,0,0,w,h);
+   res(c.toDataURL('image/jpeg',0.72));};im.onerror=rej;im.src=r.result;};
+ r.onerror=rej;r.readAsDataURL(file);});}
 function renderX(){
  const m=mk();
  $('x').innerHTML=`<div class="card"><h2>Gastos fijos de este mes</h2>${S.fixed.length?S.fixed.map((x,i)=>{const ok=x.p===m;return `<div style="padding:8px 0;border-top:1px solid var(--bd)"><div class="row"><b>${esc(x.n)}</b><span class="${ok?'':'wa'}">${ok?'✓ Pagado':'Pendiente'}</span></div><div class="g2"><div><label>Monto</label><input type="number" inputmode="numeric" value="${x.v}" data-fi="${i}" data-fk="v"></div><div><label>Día de pago (1-31)</label><input type="number" inputmode="numeric" min="1" max="31" value="${x.d}" data-fi="${i}" data-fk="d"></div></div><div class="g2"><button class="btn" data-${ok?'undo':'pay'}="${i}">${ok?'Deshacer':'Marcar pagado'}</button><button class="btn alt" data-delx="${i}">Eliminar</button></div></div>`}).join(''):'<span class="mu">No tienes gastos fijos.</span>'}</div>
@@ -155,6 +172,10 @@ function renderX(){
 function render(){renderR();renderG();renderX();renderM()}
 
 document.addEventListener('change',e=>{const t=e.target;
+ if(t.dataset.imgfor){const gid=t.dataset.imgfor,files=[...t.files];if(!files.length)return;
+  msg('Procesando foto...');Promise.all(files.map(shrink)).then(imgs=>{
+   const g=S.goals.find(x=>x.id==gid);if(g){g.img=(g.img||[]).concat(imgs);render();push();msg('')}
+  }).catch(()=>msg('No se pudo procesar la imagen'));return}
  if(t.dataset.gp){const g=S.goals.find(x=>x.id==t.dataset.gp);if(g){const oth=S.goals.reduce((a,x)=>a+(x===g?0:x.p||0),0),v=Math.max(0,+t.value||0);g.p=Math.min(v,100-oth);if(v>g.p)msg('Solo queda '+g.p+'% sin asignar');render();push()}return}
  if(t.dataset.gt){const g=S.goals.find(x=>x.id==t.dataset.gt);if(g){g.t=Math.max(0,+t.value||0);render();push()}return}
  if(t.dataset.bd){S.budgets[t.dataset.bd]=Math.min(100,Math.max(0,+t.value||0));render();push();return}
@@ -173,9 +194,10 @@ document.addEventListener('click',async e=>{const t=e.target;
   if(m.startsWith('in')){if(m==='in-bal'){if(a>S.balance)return msg('Tu saldo en cuenta no alcanza');S.balance-=a}g.s+=a}
   else{if(a>g.s)return msg('La meta no tiene tanto ahorrado');g.s-=a;if(m==='out-bal')S.balance+=a}
   render();push()}
+ if(q.delimg!==undefined){const[gid,idx]=q.delimg.split(':');const g=S.goals.find(x=>x.id==gid);if(g){g.img.splice(+idx,1);render();push()}}
  if(q.delg!==undefined&&confirm('¿Eliminar esta meta? Su dinero ahorrado NO se devuelve al saldo; si quieres devolverlo, retíralo antes.')){S.goals=S.goals.filter(x=>x.id!=q.delg);render();push()}
  if(t.id==='eq'){const n=S.goals.length;S.goals.forEach((g,i)=>g.p=Math.floor(100/n)+(i===0?100%n:0));render();push()}
- if(t.id==='addg'){const n=$('gn').value.trim(),v=+$('gv').value;if(!n||!(v>0))return msg('Escribe nombre y monto objetivo');S.goals.push({id:Date.now(),n,t:v,s:0,p:Math.max(0,100-S.goals.reduce((a,x)=>a+(x.p||0),0))});render();push()}
+ if(t.id==='addg'){const n=$('gn').value.trim(),v=+$('gv').value;if(!n||!(v>0))return msg('Escribe nombre y monto objetivo');S.goals.push({id:Date.now(),n,t:v,s:0,img:[],p:Math.max(0,100-S.goals.reduce((a,x)=>a+(x.p||0),0))});render();push()}
  if(t.id==='addf'){const n=$('fn').value.trim(),v=+$('fv').value,d=Math.min(31,Math.max(1,+$('fd').value||1));if(!n||!(v>0))return msg('Escribe nombre y monto');S.fixed.push({n,v,d,p:null});render();push()}
 });
 $('add').onclick=async()=>{const a=+$('ga').value;if(!(a>0))return;
